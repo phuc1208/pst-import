@@ -10,6 +10,7 @@ import path from "path";
 
 const INSERT_SIZE = 100;
 const SLEEP = 1000 * 60 * 5;
+const EOL = "\r\n";
 
 type Attachment = {
   name: string;
@@ -23,6 +24,7 @@ type Email = {
     name: string;
     email: string;
   };
+  headers: Record<string, any>,
   subject: string;
   text: string;
   html: string;
@@ -31,10 +33,10 @@ type Email = {
 
 
 //@TODO: Update it to your PST file path
-const FILE_TO_PROCESS = "";
+const FILE_TO_PROCESS = "backup.pst";
 const WORK_DIR = os.tmpdir();
 const LOG_FILE = path.join(WORK_DIR, path.parse(FILE_TO_PROCESS).name + ".txt");
-const pstFolder = "";
+const pstFolder = "/Users/tranvinhphuc/scripts/streamPSTFile/input";
 
 
 let depth = -1;
@@ -56,12 +58,14 @@ const doSaveToFS = async (
   sender: string,
   recipients: string
 ): Promise<void> => {
+  console.log(JSON.stringify(msg.transportMessageHeaders, null, 2))
   const email: Email = {
     from: "",
     to: {
       name: "",
       email: "",
     },
+    headers: {},
     subject: "",
     text: "",
     html: "",
@@ -113,8 +117,9 @@ const doSaveToFS = async (
   email.attachments = attachments;
 
   const eml = await buildEml(email);
+  const newEml = (msg.transportMessageHeaders.replace(/\r?\n/g, EOL + "  ") + EOL).concat(eml);  
   const filePath = path.join(`${year}-${month}-${day}`, `${uid}.eml`);
-  const destination = await emailHandler.handle(eml, filePath);
+  const destination = await emailHandler.handle(newEml, filePath);
   console.log(`Save email to ${destination}`);
 };
 
@@ -181,7 +186,7 @@ const processFolder = async (folder: PSTFolder): Promise<void> => {
       await doSaveToFS(email, sender, recipients);
       const message = `Processed: ${processEmailCount}/${totalEmailCount} - Descriptor Node ID: ${email.descriptorNodeId}`;
       await logger(message, LOG_FILE);
-
+      break;
       if (processEmailCount % (INSERT_SIZE + 1) === INSERT_SIZE) {
         await sleep(SLEEP);
       }
