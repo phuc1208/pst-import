@@ -4,6 +4,7 @@ import { PSTAttachment, PSTFile, PSTFolder, PSTMessage } from "pst-extractor";
 import emlFormat from "eml-format";
 import util from "util";
 import os from "os";
+// import fs from "fs"
 
 import { getEmlHandler, logger, sleep } from "./common";
 import path from "path";
@@ -117,8 +118,10 @@ const doSaveToFS = async (
   email.attachments = attachments;
 
   const eml = await buildEml(email);
-  const newEml = (msg.transportMessageHeaders.replace(/\r?\n/g, EOL + "  ") + EOL).concat(eml);  
+  const newEml = (msg.transportMessageHeaders.replace(/\r?\n/g, EOL) + EOL).concat(eml);  
   const filePath = path.join(`${year}-${month}-${day}`, `${uid}.eml`);
+
+  // await fs.promises.writeFile("/Users/tranvinhphuc/scripts/test.txt", newEml);
   const destination = await emailHandler.handle(newEml, filePath);
   console.log(`Save email to ${destination}`);
 };
