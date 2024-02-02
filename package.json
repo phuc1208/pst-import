@@ -1,0 +1,22 @@
+{
+  "name": "streampstfile",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.332.0",
+    "dotenv": "^16.4.1",
+    "eml-format": "^0.6.1",
+    "mime-js": "^1.2.15",
+    "pst-extractor": "^1.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.14"
+  }
+}
