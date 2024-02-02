@@ -4,14 +4,12 @@ import { PSTAttachment, PSTFile, PSTFolder, PSTMessage } from "pst-extractor";
 import emlFormat from "eml-format";
 import util from "util";
 import os from "os";
-// import fs from "fs"
 
 import { getEmlHandler, logger, sleep } from "./common";
 import path from "path";
 
 const INSERT_SIZE = 100;
 const SLEEP = 1000 * 60 * 5;
-const EOL = "\r\n";
 
 type Attachment = {
   name: string;
@@ -59,7 +57,6 @@ const doSaveToFS = async (
   sender: string,
   recipients: string
 ): Promise<void> => {
-  console.log(JSON.stringify(msg.transportMessageHeaders, null, 2))
   const email: Email = {
     from: "",
     to: {
@@ -118,10 +115,9 @@ const doSaveToFS = async (
   email.attachments = attachments;
 
   const eml = await buildEml(email);
-  const newEml = (msg.transportMessageHeaders.replace(/\r?\n/g, EOL) + EOL).concat(eml);  
+  const newEml = msg.transportMessageHeaders.concat(eml);  
   const filePath = path.join(`${year}-${month}-${day}`, `${uid}.eml`);
 
-  // await fs.promises.writeFile("/Users/tranvinhphuc/scripts/test.txt", newEml);
   const destination = await emailHandler.handle(newEml, filePath);
   console.log(`Save email to ${destination}`);
 };
