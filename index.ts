@@ -29,12 +29,13 @@ type Email = {
   attachments?: Attachment[];
 };
 
+
+//@TODO: Update it to your PST file path
 const FILE_TO_PROCESS = "";
 const WORK_DIR = os.tmpdir();
 const LOG_FILE = path.join(WORK_DIR, path.parse(FILE_TO_PROCESS).name + ".txt");
+const pstFolder = "";
 
-//@TODO: Update it to your PST file path
-const pstFolder = "/Users/tranvinhphuc/scripts/streamPSTFile/input/backup.pst";
 
 let depth = -1;
 
@@ -192,6 +193,8 @@ const processFolder = async (folder: PSTFolder): Promise<void> => {
   depth--;
 };
 // load file into memory buffer, then open as PSTFile
-const pstFile = new PSTFile(pstFolder);
+const pstFile = new PSTFile(
+  path.join(pstFolder, FILE_TO_PROCESS)
+);
 console.log(pstFile.getMessageStore().displayName);
 processFolder(pstFile.getRootFolder()).catch(console.error);
