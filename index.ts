@@ -3,8 +3,9 @@ import { PSTAttachment, PSTFile, PSTFolder, PSTMessage } from "pst-extractor";
 //@ts-ignore
 import emlFormat from "eml-format";
 import util from "util";
+import os from "os";
 
-import { getEmlHandler, sleep } from "./common";
+import { getEmlHandler, logger, sleep } from "./common";
 import path from "path";
 
 const INSERT_SIZE = 100;
@@ -28,44 +29,19 @@ type Email = {
   attachments?: Attachment[];
 };
 
+const FILE_TO_PROCESS = "";
+const WORK_DIR = os.tmpdir();
+const LOG_FILE = path.join(WORK_DIR, path.parse(FILE_TO_PROCESS).name + ".txt");
+
 //@TODO: Update it to your PST file path
 const pstFolder = "/Users/tranvinhphuc/scripts/streamPSTFile/input/backup.pst";
-const saveToFS = true;
 
-const verbose = true;
-const displaySender = true;
-const displayBody = true;
 let depth = -1;
-let col = 0;
-
-// console log highlight with https://en.wikipedia.org/wiki/ANSI_escape_code
-const ANSI_RED = 31;
-const ANSI_YELLOW = 93;
-const highlight = (str: string, code: number = ANSI_RED) =>
-  "\u001b[" + code + "m" + str + "\u001b[0m";
 
 const emailHandler = getEmlHandler();
 
 // eml
 const buildEml = util.promisify(emlFormat.build);
-
-/**
- * Returns a string with visual indication of depth in tree.
- * @param {number} depth
- * @returns {string}
- */
-const getDepth = (depth: number): string => {
-  let sdepth = "";
-  if (col > 0) {
-    col = 0;
-    sdepth += "\n";
-  }
-  for (let x = 0; x < depth - 1; x++) {
-    sdepth += " | ";
-  }
-  sdepth += " |- ";
-  return sdepth;
-};
 
 /**
  * Save items to filesystem.
@@ -118,7 +94,6 @@ const doSaveToFS = async (
     let bytesRead = 0;
     do {
       bytesRead = attachmentStream.read(buffer);
-      console.log({bytesRead, size: attachment.size, fileSize: attachment.filesize});
       mergeBuffer = Buffer.concat([mergeBuffer, buffer.slice(0, bytesRead)]);
     } while (bytesRead == bufferSize);
 
@@ -152,9 +127,6 @@ const getSender = (email: PSTMessage): string => {
   if (sender !== email.senderEmailAddress) {
     sender += " (" + email.senderEmailAddress + ")";
   }
-  if (verbose && displaySender && email.messageClass === "IPM.Note") {
-    console.log(getDepth(depth) + " sender: " + sender);
-  }
   return sender;
 };
 
@@ -169,28 +141,14 @@ const getRecipients = (email: PSTMessage): string => {
 };
 
 /**
- * Print a dot representing a message.
- */
-const printDot = (): void => {
-  process.stdout.write(".");
-  if (col++ > 100) {
-    console.log("");
-    col = 0;
-  }
-};
-
-/**
  * Walk the folder tree recursively and process emails.
  * @param {PSTFolder} folder
  */
 const processFolder = async (folder: PSTFolder): Promise<void> => {
   depth++;
-  let attempt = 0;
 
-  // the root folder doesn't have a display name
-  if (depth > 0) {
-    console.log(getDepth(depth) + folder.displayName);
-  }
+  const totalEmailCount = folder.emailCount;
+  let processEmailCount = 0;
 
   // go through the folders...
   if (folder.hasSubfolders) {
@@ -205,18 +163,7 @@ const processFolder = async (folder: PSTFolder): Promise<void> => {
     depth++;
     let email: PSTMessage = folder.getNextChild();
     while (email != null) {
-      attempt++;
-      if (verbose) {
-        console.log(
-          getDepth(depth) +
-            "Email: " +
-            email.descriptorNodeId +
-            " - " +
-            email.subject
-        );
-      } else {
-        printDot();
-      }
+      processEmailCount++;
 
       // sender
       const sender = getSender(email);
@@ -224,26 +171,20 @@ const processFolder = async (folder: PSTFolder): Promise<void> => {
       // recipients
       const recipients = getRecipients(email);
 
-      // display body?
-      if (verbose && displayBody) {
-        console.log(highlight("email.body", ANSI_YELLOW), email.body);
-        console.log(highlight("email.bodyRTF", ANSI_YELLOW), email.bodyRTF);
-        console.log(highlight("email.bodyHTML", ANSI_YELLOW), email.bodyHTML);
+      // create date string in format YYYY-MM-DD
+      let d = email.clientSubmitTime;
+      if (!d && email.creationTime) {
+        d = email.creationTime;
       }
 
-      // save content to fs?
-      if (saveToFS) {
-        // create date string in format YYYY-MM-DD
-        let d = email.clientSubmitTime;
-        if (!d && email.creationTime) {
-          d = email.creationTime;
-        }
+      await doSaveToFS(email, sender, recipients);
+      const message = `Processed: ${processEmailCount}/${totalEmailCount} - Descriptor Node ID: ${email.descriptorNodeId}`;
+      await logger(message, LOG_FILE);
 
-        await doSaveToFS(email, sender, recipients);
-        if (attempt % (INSERT_SIZE + 1) === INSERT_SIZE) {
-          await sleep(SLEEP);
-        }
+      if (processEmailCount % (INSERT_SIZE + 1) === INSERT_SIZE) {
+        await sleep(SLEEP);
       }
+
       email = folder.getNextChild();
     }
     depth--;

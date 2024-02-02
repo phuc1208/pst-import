@@ -16,6 +16,7 @@
     "eml-format": "^0.6.1",
     "fs-extra": "^11.2.0",
     "mime-js": "^1.2.15",
+    "moment-timezone": "^0.5.44",
     "pst-extractor": "^1.9.0"
   },
   "devDependencies": {

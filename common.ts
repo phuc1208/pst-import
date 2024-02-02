@@ -3,6 +3,9 @@ import fs from "fs-extra";
 import os from "os";
 import path from "path";
 import { uploadContent } from "./s3";
+import moment from "moment-timezone";
+
+moment.tz.setDefault("Asia/Ho_Chi_Minh");
 
 export const sleep = (time: number) =>
   new Promise((res) => {
@@ -42,4 +45,13 @@ export const getEmlHandler = () => {
   return env.STAGE === "prod"
     ? { handle: handleEmlProd }
     : { handle: handleEmlDev };
+};
+
+export const logger = async (message: string, dest: string) => {
+  const now = moment().format("YYYY-MM-DD HH:mm:ss");
+  try {
+    await fs.appendFile(dest, `${now} - ${message}\n`);
+  } catch (err) {
+    console.error(`Error writing to log file: ${err}`);
+  }
 };
