@@ -1,13 +1,11 @@
-import "dotenv/config";
-import { env } from "process";
-import * as fs from "fs";
+require("dotenv").config();
 import { PSTAttachment, PSTFile, PSTFolder, PSTMessage } from "pst-extractor";
 //@ts-ignore
 import emlFormat from "eml-format";
 import util from "util";
 
-import { sleep } from "./common";
-import { uploadContent } from "./s3";
+import { getEmlHandler, sleep } from "./common";
+import path from "path";
 
 const INSERT_SIZE = 10;
 const SLEEP = 1000 * 60;
@@ -48,6 +46,8 @@ const ANSI_RED = 31;
 const ANSI_YELLOW = 93;
 const highlight = (str: string, code: number = ANSI_RED) =>
   "\u001b[" + code + "m" + str + "\u001b[0m";
+
+const emailHandler = getEmlHandler();
 
 // eml
 const buildEml = util.promisify(emlFormat.build);
@@ -136,23 +136,9 @@ const doSaveToFS = async (
   email.attachments = attachments;
 
   const eml = await buildEml(email);
-  if (env.ENV === "dev") {
-    const path = `${year}-${month}-${day}-${uid}.eml`;
-    fs.writeFileSync(
-      `/Users/tranvinhphuc/scripts/streamPSTFile/output/${path}`,
-      eml
-    );
-  } else {
-    const path = `${env.COMPANY_ID}/${env.COMPANY_EMAIL}/${year}-${month}-${day}/${uid}.eml`;
-    await uploadContent({
-      remotePath: path,
-      content: eml,
-      metaData: {
-        group_id: env.GROUP_ID,
-        company_id: env.COMPANY_ID,
-      },
-    });
-  }
+  const filePath = path.join(`${year}-${month}-${day}`, `${uid}.eml`);
+  const destination = await emailHandler.handle(eml, filePath);
+  console.log(`Save email to ${destination}`);
 };
 
 /**

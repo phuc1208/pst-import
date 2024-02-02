@@ -14,10 +14,12 @@
     "@aws-sdk/client-s3": "^3.332.0",
     "dotenv": "^16.4.1",
     "eml-format": "^0.6.1",
+    "fs-extra": "^11.2.0",
     "mime-js": "^1.2.15",
     "pst-extractor": "^1.9.0"
   },
   "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
     "@types/node": "^20.11.14"
   }
 }

@@ -1,3 +1,9 @@
+import { env } from "process";
+import fs from "fs-extra";
+import os from "os";
+import path from "path";
+import { uploadContent } from "./s3";
+
 export const sleep = (time: number) =>
   new Promise((res) => {
     console.info(`wait for ${time} seconds`);
@@ -6,3 +12,34 @@ export const sleep = (time: number) =>
       res(time);
     }, time);
   });
+
+export const getEmlHandler = () => {
+  const WORK_DIR =
+    env.STAGE === "prod"
+      ? path.join(env.COMPANY_ID, env.COMPANY_EMAIL)
+      : os.tmpdir();
+
+  const handleEmlDev = async (content, filePath) => {
+    const localPath = path.join(WORK_DIR, filePath);
+    await fs.ensureDir(path.dirname(localPath));
+    await fs.writeFile(localPath, content);
+    return localPath;
+  };
+
+  const handleEmlProd = async (content, filePath) => {
+    const remotePath = path.join(WORK_DIR, filePath);
+    await uploadContent({
+      remotePath,
+      content,
+      metaData: {
+        group_id: env.GROUP_ID,
+        company_id: env.COMPANY_ID,
+      },
+    });
+    return remotePath;
+  };
+
+  return env.STAGE === "prod"
+    ? { handle: handleEmlProd }
+    : { handle: handleEmlDev };
+};
