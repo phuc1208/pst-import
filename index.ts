@@ -7,11 +7,8 @@ import util from "util";
 import { getEmlHandler, sleep } from "./common";
 import path from "path";
 
-const INSERT_SIZE = 10;
-const SLEEP = 1000 * 60;
-
-// Default buffer size each time read from stream
-const BUFFER_SIZE = 8176;
+const INSERT_SIZE = 100;
+const SLEEP = 1000 * 60 * 5;
 
 type Attachment = {
   name: string;
@@ -115,15 +112,19 @@ const doSaveToFS = async (
     if (!attachmentStream) {
       continue;
     }
-    const buffer = Buffer.alloc(attachment.size);
+    const bufferSize = 8176;
+    const buffer = Buffer.alloc(bufferSize);
+    let mergeBuffer = Buffer.alloc(0);
     let bytesRead = 0;
     do {
       bytesRead = attachmentStream.read(buffer);
-    } while (bytesRead == BUFFER_SIZE);
+      console.log({bytesRead, size: attachment.size, fileSize: attachment.filesize});
+      mergeBuffer = Buffer.concat([mergeBuffer, buffer.slice(0, bytesRead)]);
+    } while (bytesRead == bufferSize);
 
     attachments.push({
-      name: attachment.filename,
-      data: buffer,
+      name: attachment.longFilename,
+      data: mergeBuffer,
       contentType: attachment.mimeTag,
     });
   }
