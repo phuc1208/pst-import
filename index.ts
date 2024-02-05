@@ -4,11 +4,12 @@ import { PSTAttachment, PSTFile, PSTFolder, PSTMessage } from "pst-extractor";
 import emlFormat from "eml-format";
 import util from "util";
 import os from "os";
-
-import { getEmlHandler, logger, sleep } from "./common";
+import BPromise from "bluebird";
 import path from "path";
+import { getDuplicatedEmails, getEmlHandler, logger, sleep } from "./utils/common";
 
-const INSERT_SIZE = 100;
+const INSERT_SIZE = 200;
+const S3_BATCH_SIZE = 10;
 const SLEEP = 1000 * 60 * 5;
 
 type Attachment = {
@@ -37,11 +38,7 @@ const WORK_DIR = os.tmpdir();
 const LOG_FILE = path.join(WORK_DIR, path.parse(FILE_TO_PROCESS).name + ".txt");
 const pstFolder = "/Users/tranvinhphuc/scripts/streamPSTFile/input";
 
-
-let depth = -1;
-
 const emailHandler = getEmlHandler();
-
 // eml
 const buildEml = util.promisify(emlFormat.build);
 
@@ -115,10 +112,10 @@ const doSaveToFS = async (
   email.attachments = attachments;
 
   const eml = await buildEml(email);
-  const newEml = msg.transportMessageHeaders.concat(eml);  
+  // const newEml = msg.transportMessageHeaders.concat(eml);  
   const filePath = path.join(`${year}-${month}-${day}`, `${uid}.eml`);
 
-  const destination = await emailHandler.handle(newEml, filePath);
+  const destination = await emailHandler.handle(eml, filePath);
   console.log(`Save email to ${destination}`);
 };
 
@@ -150,8 +147,7 @@ const getRecipients = (email: PSTMessage): string => {
  * @param {PSTFolder} folder
  */
 const processFolder = async (folder: PSTFolder): Promise<void> => {
-  depth++;
-
+  let emails:  PSTMessage[] = [];
   const totalEmailCount = folder.emailCount;
   let processEmailCount = 0;
 
@@ -165,36 +161,53 @@ const processFolder = async (folder: PSTFolder): Promise<void> => {
 
   // and now the emails for this folder
   if (folder.contentCount > 0) {
-    depth++;
     let email: PSTMessage = folder.getNextChild();
     while (email != null) {
       processEmailCount++;
+      emails.push(email)
 
-      // sender
-      const sender = getSender(email);
-
-      // recipients
-      const recipients = getRecipients(email);
-
-      // create date string in format YYYY-MM-DD
-      let d = email.clientSubmitTime;
-      if (!d && email.creationTime) {
-        d = email.creationTime;
+      if (processEmailCount % (INSERT_SIZE + 1) !== INSERT_SIZE) {
+        email = folder.getNextChild();
+        continue;
       }
-
-      await doSaveToFS(email, sender, recipients);
-      const message = `Processed: ${processEmailCount}/${totalEmailCount} - Descriptor Node ID: ${email.descriptorNodeId}`;
-      await logger(message, LOG_FILE);
-      break;
-      if (processEmailCount % (INSERT_SIZE + 1) === INSERT_SIZE) {
-        await sleep(SLEEP);
-      }
-
-      email = folder.getNextChild();
+      console.time("DUPLICATED");
+      const duplicatedEmails = await getDuplicatedEmails(
+        getSender(email),
+        emails.map(email => email.subject),
+      );
+      console.timeEnd("DUPLICATED");
+      
+      const duplicatedEmailMappers = new Map(
+        duplicatedEmails.map(duplicatedEmail => {
+          const extractEmlPattern = /\/([A-Za-z0-9_=\-]+\.eml)/i;
+          const emlName = duplicatedEmail.object.key.match(extractEmlPattern)?.[1];
+          const id = emlName.split("_")[0];
+          return [id, true]
+        }
+      ));
+      const nonDuplicatedEmails = emails.filter(
+        email => !duplicatedEmailMappers.has(email.descriptorNodeId.toString())
+      )
+      await BPromise.map(
+        nonDuplicatedEmails,
+        async email => {
+          // sender
+          const sender = getSender(email);
+          // recipients
+          const recipients = getRecipients(email);
+          await doSaveToFS(email, sender, recipients);
+          const message = `Processed: ${processEmailCount}/${totalEmailCount} - Descriptor Node ID: ${email.descriptorNodeId}`
+          await logger(message, LOG_FILE);
+        },
+        {
+          concurrency: S3_BATCH_SIZE
+        }
+      );
+      // clean-up
+      emails = [];
+      await sleep(SLEEP);
     }
-    depth--;
   }
-  depth--;
 };
 // load file into memory buffer, then open as PSTFile
 const pstFile = new PSTFile(

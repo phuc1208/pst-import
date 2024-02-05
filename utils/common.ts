@@ -1,9 +1,10 @@
 import { env } from "process";
+import moment from "moment-timezone";
 import fs from "fs-extra";
 import os from "os";
 import path from "path";
 import { uploadContent } from "./s3";
-import moment from "moment-timezone";
+import { getEmails } from "../gql/email";
 
 moment.tz.setDefault("Asia/Ho_Chi_Minh");
 
@@ -55,3 +56,19 @@ export const logger = async (message: string, dest: string) => {
     console.error(`Error writing to log file: ${err}`);
   }
 };
+
+export const getDuplicatedEmails = async(sender: string, subjects: string[]) => {
+  const emails = await getEmails({
+    company_id: {
+      _eq: env.COMPANY_ID
+    },
+    subject: {
+      _in: subjects
+    },
+    from: {
+      _eq: sender
+    }
+  });
+
+  return emails;
+}
