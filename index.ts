@@ -7,6 +7,7 @@ import os from "os";
 import BPromise from "bluebird";
 import path from "path";
 import { getDuplicatedEmails, getEmlHandler, logger, sleep } from "./utils/common";
+import { partition } from "lodash";
 
 const INSERT_SIZE = 200;
 const S3_BATCH_SIZE = 10;
@@ -33,10 +34,10 @@ type Email = {
 
 
 //@TODO: Update it to your PST file path
-const FILE_TO_PROCESS = "backup.pst";
+const FILE_TO_PROCESS = "BIZZI.1.DONE.pst";
 const WORK_DIR = os.tmpdir();
 const LOG_FILE = path.join(WORK_DIR, path.parse(FILE_TO_PROCESS).name + ".txt");
-const pstFolder = "/Users/tranvinhphuc/scripts/streamPSTFile/input";
+const pstFolder = "/home/bizzivietnam/masan";
 
 const emailHandler = getEmlHandler();
 // eml
@@ -113,7 +114,7 @@ const doSaveToFS = async (
 
   const eml = await buildEml(email);
   // const newEml = msg.transportMessageHeaders.concat(eml);  
-  const filePath = path.join(`${year}-${month}-${day}`, `${uid}.eml`);
+  const filePath = path.join(`${year}-${month}-${day}`, `${uid}_${Date.now()}.eml`);
 
   const destination = await emailHandler.handle(eml, filePath);
   console.log(`Save email to ${destination}`);
@@ -180,14 +181,16 @@ const processFolder = async (folder: PSTFolder): Promise<void> => {
       const duplicatedEmailMappers = new Map(
         duplicatedEmails.map(duplicatedEmail => {
           const extractEmlPattern = /\/([A-Za-z0-9_=\-]+\.eml)/i;
-          const emlName = duplicatedEmail.object.key.match(extractEmlPattern)?.[1];
-          const id = emlName.split("_")[0];
+          const emlFileName = duplicatedEmail.object.key.match(extractEmlPattern)?.[1];
+          const id =  path.parse(emlFileName).name.split("_")[0];
           return [id, true]
         }
       ));
-      const nonDuplicatedEmails = emails.filter(
-        email => !duplicatedEmailMappers.has(email.descriptorNodeId.toString())
-      )
+
+      const [nonDuplicatedEmails, duplicatedEmailPartitions] = partition(emails, 
+        (email) => !duplicatedEmailMappers.has(email.descriptorNodeId.toString())
+      );
+
       await BPromise.map(
         nonDuplicatedEmails,
         async email => {
@@ -203,6 +206,15 @@ const processFolder = async (folder: PSTFolder): Promise<void> => {
           concurrency: S3_BATCH_SIZE
         }
       );
+
+      await BPromise.map(
+        duplicatedEmailPartitions,
+        async email => {
+          const message = `Duplicated email with descriptor Node ID: ${email.descriptorNodeId}`
+          await logger(message, LOG_FILE);
+        }
+      )
+
       // clean-up
       emails = [];
       await sleep(SLEEP);
