@@ -6,8 +6,9 @@ import util from "util";
 import os from "os";
 import BPromise from "bluebird";
 import path from "path";
+import partition from "lodash/partition";
+import isEmpty from "lodash/isEmpty";
 import { getDuplicatedEmails, getEmlHandler, logger, sleep } from "./utils/common";
-import { partition } from "lodash";
 
 const INSERT_SIZE = 200;
 const S3_BATCH_SIZE = 10;
@@ -217,7 +218,9 @@ const processFolder = async (folder: PSTFolder): Promise<void> => {
 
       // clean-up
       emails = [];
-      await sleep(SLEEP);
+      if(!isEmpty(nonDuplicatedEmails)) {
+        await sleep(SLEEP);
+      }
     }
   }
 };
