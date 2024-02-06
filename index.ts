@@ -8,7 +8,7 @@ import BPromise from "bluebird";
 import path from "path";
 import partition from "lodash/partition";
 import isEmpty from "lodash/isEmpty";
-import { getDuplicatedEmails, getEmlHandler, logger, sleep } from "./utils/common";
+import { getEmailsBySubjectsAndSender, getEmlHandler, logger, sleep } from "./utils/common";
 
 const INSERT_SIZE = 200;
 const S3_BATCH_SIZE = 10;
@@ -173,17 +173,22 @@ const processFolder = async (folder: PSTFolder): Promise<void> => {
         continue;
       }
       console.time("DUPLICATED");
-      const duplicatedEmails = await getDuplicatedEmails(
+      const mayDuplicatedEmails = await getEmailsBySubjectsAndSender(
         getSender(email),
         emails.map(email => email.subject),
       );
       console.timeEnd("DUPLICATED");
       
       const duplicatedEmailMappers = new Map(
-        duplicatedEmails.map(duplicatedEmail => {
+        mayDuplicatedEmails.map(mayDuplicatedEmail => {
+          const parseName = path.parse(mayDuplicatedEmail.object.key);
+          if(!parseName.ext.endsWith("eml")) {
+            return [mayDuplicatedEmail.object.key, false];
+          }
+
           const extractEmlPattern = /\/([A-Za-z0-9_=\-]+\.eml)/i;
-          const emlFileName = duplicatedEmail.object.key.match(extractEmlPattern)?.[1];
-          const id =  path.parse(emlFileName).name.split("_")[0];
+          const emlFileName = mayDuplicatedEmail.object.key.match(extractEmlPattern)?.[1];
+          const id =  emlFileName.split("_")[0];
           return [id, true]
         }
       ));

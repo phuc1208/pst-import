@@ -57,7 +57,7 @@ export const logger = async (message: string, dest: string) => {
   }
 };
 
-export const getDuplicatedEmails = async(sender: string, subjects: string[]) => {
+export const getEmailsBySubjectsAndSender = async(sender: string, subjects: string[]) => {
   const emails = await getEmails({
     company_id: {
       _eq: env.COMPANY_ID
