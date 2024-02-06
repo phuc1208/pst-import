@@ -120,12 +120,13 @@ const doSaveToFS = async (
   email.attachments = attachments;
 
   const eml = await buildEml(email);
+  const fileToProccessName = path.parse(FILE_TO_PROCESS).name;
   // const newEml = msg.transportMessageHeaders.concat(eml);  
-  const filePath = path.join(`${year}-${month}-${day}`, `${uid}.eml`);
+  const filePath = path.join(`${year}-${month}-${day}/${fileToProccessName}`, `${uid}.eml`);
 
   const destination = await emailHandler.handle(eml, filePath);
   // cache proccessed file
-  persist(path.join(WORK_DIR, `${path.parse(FILE_TO_PROCESS).name}_cache` + ".txt"), uid.toString(), filePath);
+  persist(path.join(WORK_DIR, `${fileToProccessName}_cache` + ".txt"), uid.toString(), filePath);
   cacheEmails.set(uid.toString(), filePath);
 
   console.log(`Save email to ${destination}`);
