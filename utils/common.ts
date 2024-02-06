@@ -57,6 +57,23 @@ export const logger = async (message: string, dest: string) => {
   }
 };
 
+export const loadFile = (dest: string, fileName: string) => {
+  try {
+    const data = fs.readFileSync(path.join(dest, fileName));
+    return data.toString();
+  } catch(err) {
+    return "";
+  }
+}
+
+export const persist = async(dest: string, id: string, fileName: string) => {
+  try {
+    await fs.appendFile(dest, `${id}_${fileName}\n`);
+  } catch(err) {
+    console.error(`Error writing to persist to file: ${err}`);
+  }
+};
+
 export const getEmailsBySubjectsAndSender = async(sender: string, subjects: string[]) => {
   const emails = await getEmails({
     company_id: {

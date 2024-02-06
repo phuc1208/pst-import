@@ -8,11 +8,11 @@ import BPromise from "bluebird";
 import path from "path";
 import partition from "lodash/partition";
 import isEmpty from "lodash/isEmpty";
-import { getEmailsBySubjectsAndSender, getEmlHandler, logger, sleep } from "./utils/common";
+import { getEmlHandler, loadFile, logger, persist, sleep } from "./utils/common";
 
 const INSERT_SIZE = 200;
-const S3_BATCH_SIZE = 10;
-const SLEEP = 1000 * 60 * 5;
+const S3_BATCH_SIZE = 2;
+const SLEEP = 1000 * 2;
 
 type Attachment = {
   name: string;
@@ -35,10 +35,16 @@ type Email = {
 
 
 //@TODO: Update it to your PST file path
-const FILE_TO_PROCESS = "BIZZI.1.DONE.pst";
+const FILE_TO_PROCESS = "backup.pst";
 const WORK_DIR = os.tmpdir();
 const LOG_FILE = path.join(WORK_DIR, path.parse(FILE_TO_PROCESS).name + ".txt");
-const pstFolder = "/home/bizzivietnam/masan";
+const pstFolder = "/Users/tranvinhphuc/scripts/streamPSTFile/input";
+// id - filename
+const cacheFile = loadFile(WORK_DIR, `${path.parse(FILE_TO_PROCESS).name}_cache` + ".txt");
+const cacheEmails = new Map<string, string>(cacheFile.split("\n").map(line => {
+  const [id, name] = line.split("_");
+  return [id, name];
+}));
 
 const emailHandler = getEmlHandler();
 // eml
@@ -115,9 +121,13 @@ const doSaveToFS = async (
 
   const eml = await buildEml(email);
   // const newEml = msg.transportMessageHeaders.concat(eml);  
-  const filePath = path.join(`${year}-${month}-${day}`, `${uid}_${Date.now()}.eml`);
+  const filePath = path.join(`${year}-${month}-${day}`, `${uid}.eml`);
 
   const destination = await emailHandler.handle(eml, filePath);
+  // cache proccessed file
+  persist(path.join(WORK_DIR, `${path.parse(FILE_TO_PROCESS).name}_cache` + ".txt"), uid.toString(), filePath);
+  cacheEmails.set(uid.toString(), filePath);
+
   console.log(`Save email to ${destination}`);
 };
 
@@ -172,29 +182,10 @@ const processFolder = async (folder: PSTFolder): Promise<void> => {
         email = folder.getNextChild();
         continue;
       }
-      console.time("DUPLICATED");
-      const mayDuplicatedEmails = await getEmailsBySubjectsAndSender(
-        getSender(email),
-        emails.map(email => email.subject),
-      );
-      console.timeEnd("DUPLICATED");
-      
-      const duplicatedEmailMappers = new Map(
-        mayDuplicatedEmails.map(mayDuplicatedEmail => {
-          const parseName = path.parse(mayDuplicatedEmail.object.key);
-          if(!parseName.ext.endsWith("eml")) {
-            return [mayDuplicatedEmail.object.key, false];
-          }
 
-          const extractEmlPattern = /\/([A-Za-z0-9_=\-]+\.eml)/i;
-          const emlFileName = mayDuplicatedEmail.object.key.match(extractEmlPattern)?.[1];
-          const id =  emlFileName.split("_")[0];
-          return [id, true]
-        }
-      ));
-
-      const [nonDuplicatedEmails, duplicatedEmailPartitions] = partition(emails, 
-        (email) => !duplicatedEmailMappers.has(email.descriptorNodeId.toString())
+      const [nonDuplicatedEmails, duplicatedEmails] = partition(
+        emails, 
+        (email) => !cacheEmails.has(email.descriptorNodeId.toString())
       );
 
       await BPromise.map(
@@ -214,7 +205,7 @@ const processFolder = async (folder: PSTFolder): Promise<void> => {
       );
 
       await BPromise.map(
-        duplicatedEmailPartitions,
+        duplicatedEmails,
         async email => {
           const message = `Duplicated email with descriptor Node ID: ${email.descriptorNodeId}`
           await logger(message, LOG_FILE);
@@ -223,9 +214,11 @@ const processFolder = async (folder: PSTFolder): Promise<void> => {
 
       // clean-up
       emails = [];
-      if(!isEmpty(nonDuplicatedEmails)) {
-        await sleep(SLEEP);
+      if(isEmpty(nonDuplicatedEmails)) {
+        console.log(`all this file is duplicated from ${processEmailCount - INSERT_SIZE} to ${processEmailCount}`);
+        continue;
       }
+      await sleep(SLEEP);
     }
   }
 };
