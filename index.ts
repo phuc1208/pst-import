@@ -184,13 +184,13 @@ const processFolder = async (folder: PSTFolder): Promise<void> => {
         continue;
       }
 
-      const [nonDuplicatedEmails, duplicatedEmails] = partition(
+      const [emailsToSync, duplicatedEmails] = partition(
         emails, 
         (email) => !cacheEmails.has(email.descriptorNodeId.toString())
       );
 
       await BPromise.map(
-        nonDuplicatedEmails,
+        emailsToSync,
         async email => {
           // sender
           const sender = getSender(email);
@@ -215,7 +215,7 @@ const processFolder = async (folder: PSTFolder): Promise<void> => {
 
       // clean-up
       emails = [];
-      if(isEmpty(nonDuplicatedEmails)) {
+      if(isEmpty(emailsToSync)) {
         console.log(`all this file is duplicated from ${processEmailCount - INSERT_SIZE} to ${processEmailCount}`);
         continue;
       }
