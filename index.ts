@@ -38,7 +38,10 @@ type Email = {
 const FILE_TO_PROCESS = "backup.pst";
 const WORK_DIR = os.tmpdir();
 const LOG_FILE = path.join(WORK_DIR, path.parse(FILE_TO_PROCESS).name + ".txt");
+
+// PATH TO PST FOLDER
 const pstFolder = "/Users/tranvinhphuc/scripts/streamPSTFile/input";
+const enableSleep = false;
 // id - filename
 const cacheFile = loadFile(WORK_DIR, `${path.parse(FILE_TO_PROCESS).name}_cache` + ".txt");
 const cacheEmails = new Map<string, string>(cacheFile.split("\n").map(line => {
@@ -219,7 +222,10 @@ const processFolder = async (folder: PSTFolder): Promise<void> => {
         console.log(`all this file is duplicated from ${processEmailCount - INSERT_SIZE} to ${processEmailCount}`);
         continue;
       }
-      await sleep(SLEEP);
+
+      if(enableSleep) {
+        await sleep(SLEEP);
+      }
     }
   }
 };
